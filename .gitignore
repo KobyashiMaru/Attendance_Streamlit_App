@@ -1,3 +1,10 @@
+# Data Files 
+*.csv
+*.xls
+*.xlsx
+*.tsv
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

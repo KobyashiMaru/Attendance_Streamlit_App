@@ -10,19 +10,22 @@ st.title("Employee Attendance System")
 # Sidebar for File Uploads
 st.sidebar.header("Upload Data")
 
-swipe_file = st.sidebar.file_uploader("1. Swipe Records (員工刷卡記錄表)", type=['xls', 'xlsx'])
+attendance_file = st.sidebar.file_uploader("1. Attendance Report (考勤報表)", type=['xls', 'xlsx'])
 abnormal_file = st.sidebar.file_uploader("2. Abnormal Stats (異常考勤統計表)", type=['xls', 'xlsx'])
-report_file = st.sidebar.file_uploader("3. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv'])
-attendance_file = st.sidebar.file_uploader("4. Attendance Report (考勤報表)", type=['xls', 'xlsx']) # Optional/Supplementary
+report_file = st.sidebar.file_uploader("3. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv', 'xlsx'])
 
 if st.sidebar.button("Analyze Data"):
-    if not (swipe_file and abnormal_file and report_file):
-        st.error("Please upload Swipe Records, Abnormal Stats, and Overtime Report to proceed.")
+    if not (attendance_file and abnormal_file and report_file):
+        st.error("Please upload Attendance Report, Abnormal Stats, and Overtime Report to proceed.")
     else:
         with st.spinner("Processing files..."):
             try:
                 # 1. Read files
-                swipe_df = calculations.read_file_by_extension(swipe_file)
+                attendance_file.seek(0)
+                abnormal_file.seek(0)
+                report_file.seek(0)
+                
+                attendance_df = calculations.read_file_by_extension(attendance_file)
                 abnormal_df = calculations.read_file_by_extension(abnormal_file)
                 report_df = calculations.read_file_by_extension(report_file)
                 
@@ -42,21 +45,35 @@ if st.sidebar.button("Analyze Data"):
                 calculations.validate_columns(report_df, ['姓名', '回報屬性'], "Overtime Report")
 
                 # 3. Parse Data
-                parsed_swipes = calculations.parse_swipe_records(swipe_df)
+                parsed_attendance = calculations.parse_attendance_report(attendance_df)
                 parsed_abnormal = calculations.parse_abnormal_stats(abnormal_df)
                 parsed_report = calculations.parse_overtime_leave_report(report_df)
                 
-                if parsed_swipes.empty:
-                    st.warning("No valid swipe records found.")
+                # =========================== Test ===========================
+
+                # print("attendance_file: ")
+                # print(attendance_file)
+
+                # print("attendance_df:")
+                # print(attendance_df)
+
+                # print("parsed_attendance:")
+                # print(parsed_attendance.head())
+                # =========================== Test ===========================
+
+
+                # 4. Validate parsed data
+                if parsed_attendance.empty:
+                    st.warning("No valid attendance records found.")
                 
                 # Cache data
                 st.session_state['data_loaded'] = True
-                st.session_state['swipes'] = parsed_swipes
+                st.session_state['attendance'] = parsed_attendance
                 st.session_state['abnormal'] = parsed_abnormal
                 st.session_state['report'] = parsed_report
                 
                 # Get employee list
-                employees = sorted(list(set(parsed_swipes['Employee'].dropna().unique()) | set(parsed_report['Employee'].dropna().unique())))
+                employees = sorted(list(set(parsed_attendance['Employee'].dropna().unique()) | set(parsed_report['Employee'].dropna().unique())))
                 st.session_state['employees'] = employees
                 st.success("Data processed successfully!")
                 
@@ -77,11 +94,24 @@ if st.session_state.get('data_loaded'):
         
         if selected_emp:
             # Generate Summary
-            swipes = st.session_state['swipes']
+            attendance = st.session_state['attendance']
             abnormal = st.session_state['abnormal']
             report = st.session_state['report']
+
+            # =========================== Test ===========================
+
+            # print("attendance: ")
+            # print(attendance.head())
+
+            # print("abnormal:")
+            # print(abnormal.head())
+
+            # print("report:")
+            # print(report.head())
+
+            # =========================== Test ===========================
             
-            summary_data = calculations.generate_employee_summary(selected_emp, swipes, abnormal, report)
+            summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
             
             # Display Tables
             st.markdown("### Monthly Report")

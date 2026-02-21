@@ -326,7 +326,7 @@ def parse_overtime_leave_report(df):
         
         def is_valid_attr(val):
             s = str(val)
-            return '上班' in s or '請假' in s or '家訪' in s or '加班' in s
+            return '上班' in s or '請假' in s or '家訪' in s
             
         if not is_valid_attr(attr):
             # Check next column (idx_attr + 1)
@@ -348,29 +348,14 @@ def parse_overtime_leave_report(df):
                 return row.iloc[target]
             return None
 
-        def get_val_by_name(name):
-            try:
-                idx = df.columns.get_loc(name)
-                return get_val(idx)
-            except:
-                return None
-
         # Data extraction
         # Overtime / Duty
-        if '加班' in str(attr) or '門診上班' in str(attr):
+        if '門診上班' in str(attr):
             date_str = str(get_val(idx_work_date))
             start_t = get_val(idx_start_time)
             end_t = get_val(idx_end_time)
             ot_attr = get_val(idx_ot_type)
             ot_patient = get_val(idx_ot_patient)
-            
-            period_raw = get_val_by_name('時段')
-            period = ""
-            if period_raw:
-                p_str = str(period_raw)
-                if '早' in p_str: period = '早診'
-                elif '午' in p_str: period = '午診'
-                elif '晚' in p_str: period = '晚診'
             
             # Calculate elapsed minutes if possible
             elapsed_min = 0
@@ -405,7 +390,6 @@ def parse_overtime_leave_report(df):
             processed.append({
                 'Type': 'Overtime',
                 'Date': date_str,
-                'Period': period,
                 'Start Time': start_t,
                 'End Time': end_t,
                 'Elapsed Minutes': elapsed_min,
@@ -422,6 +406,12 @@ def parse_overtime_leave_report(df):
              
              # Locate base indices for this row's processing only or lookup
              # Better to look up by name then index + offset
+             def get_val_by_name(name):
+                 try:
+                     idx = df.columns.get_loc(name)
+                     return get_val(idx)
+                 except:
+                     return None
             
              processed.append({
                 'Type': 'Leave',
@@ -433,6 +423,13 @@ def parse_overtime_leave_report(df):
             })
         
         elif '家訪' in str(attr):
+             def get_val_by_name(name):
+                 try:
+                     idx = df.columns.get_loc(name)
+                     return get_val(idx)
+                 except:
+                     return None
+
              # Calculate duration for visits
              duration_hr = 0
              try:
@@ -493,86 +490,37 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     emp_abnormal['Date'] = emp_abnormal['Date'].apply(normalize_date)
     emp_report['Date'] = emp_report['Date'].apply(normalize_date)
     
-    # We need Period in emp_swipes for joining
-    def get_period(start_t):
-        if pd.isna(start_t): return ""
-        try:
-            h = int(str(start_t).split(':')[0])
-            if h < 12: return "早診"
-            if h < 18: return "午診"
-            return "晚診"
-        except:
-            return ""
-            
-    emp_swipes['Period'] = emp_swipes['Start Time'].apply(get_period)
-    
-    # Calculate Late Time from Swipes
-    def calc_late_time(row):
-        start_t = row['Start Time']
-        period = row['Period']
-        if pd.isna(start_t) or not start_t: return 0
-        try:
-            # We match formats like '08:00' or similar clock-in strings
-            dt = datetime.strptime(str(start_t), "%H:%M")
-            if period == "早診":
-                threshold = datetime.strptime("08:05", "%H:%M")
-                if dt > threshold:
-                    return (dt - threshold).total_seconds() / 60
-            elif period == "晚診":
-                threshold = datetime.strptime("16:05", "%H:%M")
-                if dt > threshold:
-                    return (dt - threshold).total_seconds() / 60
-        except:
-            pass
-        return 0
-
-    if not emp_swipes.empty:
-         emp_swipes['Late Duration (min)'] = emp_swipes.apply(calc_late_time, axis=1)
-    else:
-         emp_swipes['Late Duration (min)'] = 0
-
     # 1. Filter Overtime & Leave records strictly by dates in the Swipe Records
     valid_dates = set(emp_swipes['Date'].unique())
-    emp_report_filtered = emp_report[emp_report['Date'].isin(valid_dates)].copy()
-
-    # Calculate Overtime from Swipes
-    ot_records = emp_report_filtered[emp_report_filtered['Type'] == 'Overtime'].copy()
+    # Note: If an employee took Leave, but didn't swipe, we might lose Leave hours?
+    # The requirement says: "heavily reference the swipe record input, only the record in the swipe record are valid"
+    # "join the swipe record with the output of parse_overtime_leave_report"
+    # Merging on swipe records dates!
     
-    # Merge ot_records with emp_swipes on Date and Period to get corresponding swipe End Time
-    ot_merged = pd.merge(ot_records, emp_swipes[['Date', 'Period', 'End Time', 'Start Time']], on=['Date', 'Period'], how='left', suffixes=('', '_swipe'))
+    emp_abnormal_filtered = emp_abnormal[emp_abnormal['Date'].isin(valid_dates)]
+    emp_report_filtered = emp_report[emp_report['Date'].isin(valid_dates)]
+
     
-    # Calculate Elapsed Minutes
-    def calc_overtime(row):
-        end_t = row['End Time_swipe']
-        period = row['Period']
-        if pd.isna(end_t) or not end_t: return 0
-        try:
-            dt = datetime.strptime(str(end_t), "%H:%M")
-            if '早診' in str(period):
-                threshold = datetime.strptime("12:10", "%H:%M")
-                if dt > threshold:
-                    return (dt - threshold).total_seconds() / 60
-            elif '晚診' in str(period):
-                threshold = datetime.strptime("20:10", "%H:%M")
-                if dt > threshold:
-                    return (dt - threshold).total_seconds() / 60
-        except:
-            pass
-        return 0
-
-    if not ot_merged.empty:
-        ot_merged['Elapsed Minutes'] = ot_merged.apply(calc_overtime, axis=1)
-        ot_merged['End Time'] = ot_merged['End Time_swipe']
-        ot_merged['Start Time'] = ot_merged['Start Time_swipe'] # Fill in the actual start time as well just in case
-        ot_records = ot_merged.drop(columns=['End Time_swipe', 'Start Time_swipe'])
-    else:
-        ot_records['Elapsed Minutes'] = 0
-
     # 2. Monthly Report
-    total_late = emp_swipes['Late Duration (min)'].sum() if not emp_swipes.empty else 0
-    total_ot_mins = ot_records['Elapsed Minutes'].sum() if not ot_records.empty else 0
-    total_duty_hours = emp_swipes['Total Duration (hr)'].sum() if not emp_swipes.empty else 0
+    # Columns: Month, Total Late Mins, Total Overtime Mins, Total On-Duty Hours, Total Leave Hours
     
+    # Calculate totals from filtered logs
+    total_late = emp_abnormal_filtered['Total Late Mins'].sum()
+    
+    ot_records = emp_report_filtered[emp_report_filtered['Type'] == 'Overtime']
+
+    # =========================== Test ===========================
+    print(ot_records.columns)
+    print("emp_report")
+    print(emp_report.head())
+    # =========================== Test ===========================
+    
+    total_ot_mins = ot_records['Elapsed Minutes'].sum()
+    
+    # On-Duty Hours from Swipes
+    total_duty_hours = emp_swipes['Total Duration (hr)'].sum()
+    
+    # Leave Hours
     leave_records = emp_report_filtered[emp_report_filtered['Type'] == 'Leave']
     total_leave_hours = 0
     for period in leave_records['Period']:
@@ -584,7 +532,7 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     # Month - extract from first date available
     month_str = "Unknown"
     if not emp_swipes.empty:
-        month_str = emp_swipes.iloc[0]['Date'][:7]
+        month_str = emp_swipes.iloc[0]['Date'][:7] # YYYY-MM
     elif not emp_report.empty:
         month_str = str(emp_report.iloc[0]['Date'])[:7]
 
@@ -597,25 +545,39 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     }])
     
     # 3. Overtime Detail
-    overtime_detail = ot_records[['Date', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note']] if not ot_records.empty else pd.DataFrame(columns=['Date', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note'])
+    overtime_detail = emp_report[emp_report['Type'] == 'Overtime'][['Date', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note']]
     
     # 4. Leave Details
-    leave_detail = leave_records[['Date', 'Period', 'Leave Type', 'Reason']].rename(columns={'Leave Type': 'Type'}) if not leave_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Type', 'Reason'])
+    leave_detail = emp_report[emp_report['Type'] == 'Leave'][['Date', 'Period', 'Leave Type', 'Reason']].rename(columns={'Leave Type': 'Type'})
     
     # 5. Duty Time Entries
-    duty_entries = emp_swipes[['Date', 'Period', 'Start Time', 'End Time', 'Total Duration (hr)', 'Late Duration (min)']].copy()
+    # Requirement: "Duty Time Entries" ... heavily reference swipe record
+    duty_entries = emp_swipes[['Date', 'Start Time', 'End Time', 'Total Duration (hr)']].copy()
     
-    if not ot_records.empty:
-        daily_ot = ot_records.groupby(['Date', 'Period'])['Elapsed Minutes'].sum().reset_index()
-        duty_entries = duty_entries.merge(
-            daily_ot,
-            on=['Date', 'Period'],
-            how='left'
-        ).rename(columns={'Elapsed Minutes': 'Overtime Duration (min)'})
-    else:
-        duty_entries['Overtime Duration (min)'] = 0
-        
-    duty_entries['Overtime Duration (min)'] = duty_entries['Overtime Duration (min)'].fillna(0)
+    duty_entries = duty_entries.merge(
+        emp_abnormal_filtered[['Date', 'Total Late Mins']], 
+        on='Date', 
+        how='left'
+    ).rename(columns={'Total Late Mins': 'Late Duration (min)'})
+    
+    daily_ot = ot_records.groupby('Date')['Elapsed Minutes'].sum().reset_index()
+    duty_entries = duty_entries.merge(
+        daily_ot,
+        on='Date',
+        how='left'
+    ).rename(columns={'Elapsed Minutes': 'Overtime Duration (min)'})
+    
+    def get_period(start_t):
+        if pd.isna(start_t): return ""
+        try:
+            h = int(start_t.split(':')[0])
+            if h < 12: return "早診"
+            if h < 18: return "午診"
+            return "晚診"
+        except:
+            return ""
+            
+    duty_entries['Period'] = duty_entries['Start Time'].apply(get_period)
     
     # Reorder columns
     duty_entries = duty_entries[['Date', 'Period', 'Start Time', 'End Time', 'Total Duration (hr)', 'Overtime Duration (min)', 'Late Duration (min)']].fillna(0)
@@ -627,13 +589,10 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     # 6. Visit Weekly Summary
     # Columns: Week, Total Duration (hr)
     visit_entries_calc = visit_entries.copy()
-    if not visit_entries_calc.empty:
-        visit_entries_calc['DateObj'] = pd.to_datetime(visit_entries['Date'].apply(normalize_date))
-        # Week number
-        visit_entries_calc['Week'] = visit_entries_calc['DateObj'].dt.isocalendar().week
-        visit_weekly = visit_entries_calc.groupby('Week')['Total Duration (hr)'].sum().reset_index()
-    else:
-        visit_weekly = pd.DataFrame(columns=['Week', 'Total Duration (hr)'])
+    visit_entries_calc['DateObj'] = pd.to_datetime(visit_entries['Date'].apply(normalize_date))
+    # Week number
+    visit_entries_calc['Week'] = visit_entries_calc['DateObj'].dt.isocalendar().week
+    visit_weekly = visit_entries_calc.groupby('Week')['Total Duration (hr)'].sum().reset_index()
     
     return {
         'Monthly Report': monthly_report,

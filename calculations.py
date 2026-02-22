@@ -577,12 +577,17 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     elif not emp_report.empty:
         month_str = str(emp_report.iloc[0]['Date'])[:7]
 
+    visit_records = emp_report[emp_report['Type'] == 'Visit']
+    visit_entries = visit_records[['Date', 'Start Time', 'End Time', 'Patient Name', 'Total Duration (hr)']]
+    total_visit_hours = visit_entries['Total Duration (hr)'].sum() if not visit_entries.empty else 0
+
     monthly_report = pd.DataFrame([{
         'Month': month_str,
         'Total Late Mins': total_late,
         'Total Overtime Mins': total_ot_mins,
         'Total On-Duty Hours': total_duty_hours,
-        'Total Leave Hours': total_leave_hours
+        'Total Leave Hours': total_leave_hours,
+        'Total Visit Hours': total_visit_hours
     }])
     
     # 3. Overtime Detail
@@ -610,16 +615,14 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     duty_entries = duty_entries[['Date', 'Period', 'Start Time', 'End Time', 'Total Duration (hr)', 'Overtime Duration (min)', 'Late Duration (min)']].fillna(0)
     
     # 5. Visit Entries
-    visit_records = emp_report[emp_report['Type'] == 'Visit']
-    visit_entries = visit_records[['Date', 'Start Time', 'End Time', 'Patient Name', 'Total Duration (hr)']]
     
     # 6. Visit Weekly Summary
     # Columns: Week, Total Duration (hr)
     visit_entries_calc = visit_entries.copy()
     if not visit_entries_calc.empty:
         visit_entries_calc['DateObj'] = pd.to_datetime(visit_entries['Date'].apply(normalize_date))
-        # Week number
-        visit_entries_calc['Week'] = visit_entries_calc['DateObj'].dt.isocalendar().week
+        # Week number (Week of the month, 1-7 is Week 1, 8-14 is Week 2, etc.)
+        visit_entries_calc['Week'] = ((visit_entries_calc['DateObj'].dt.day - 1) // 7) + 1
         visit_weekly = visit_entries_calc.groupby('Week')['Total Duration (hr)'].sum().reset_index()
     else:
         visit_weekly = pd.DataFrame(columns=['Week', 'Total Duration (hr)'])

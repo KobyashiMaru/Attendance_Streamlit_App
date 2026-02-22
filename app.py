@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import calculations
+import validation
 import time
 
 st.set_page_config(page_title="Employee Attendance System", layout="wide")
@@ -30,19 +31,16 @@ if st.sidebar.button("Analyze Data"):
                 report_df = calculations.read_file_by_extension(report_file)
                 
 
-                # 2. Validate columns
-                # Swipe validation (Implicit in parse or explicit?)
-                # calculations.validate_columns(swipe_df, [], "Swipe Records") # Complex structure
+                # 2. Validate structures and columns
+                # Swipe validation
+                validation.validate_attendance_report(attendance_df, attendance_file.name)
                 
-                # Preprocess abnormal stats to fix headers
+                # Preprocess abnormal stats to fix headers, then validate
                 abnormal_df = calculations.preprocess_abnormal_stats(abnormal_df)
-                calculations.validate_columns(abnormal_df, ['姓名', '日期', '遲到時間（分鐘）'], "Abnormal Stats")
+                validation.validate_abnormal_stats(abnormal_df, abnormal_file.name)
                 
-                # Report validation - need to check what columns we parsed
-                # The tsv has '回報屬性', '加班屬性' etc.
-
-                # And we need '姓名' now!
-                calculations.validate_columns(report_df, ['姓名', '回報屬性'], "Overtime Report")
+                # Overtime Report validation
+                validation.validate_overtime_report(report_df, report_file.name)
 
                 # 3. Parse Data
                 parsed_attendance = calculations.parse_attendance_report(attendance_df)

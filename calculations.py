@@ -40,15 +40,7 @@ def read_file_by_extension(uploaded_file):
     except Exception as e:
         raise ValueError(f"Error reading file {filename}: {str(e)}")
 
-def validate_columns(df, required_columns, file_name):
-    """
-    Checks if required_columns exist in the dataframe.
-    Raises ValueError if columns are missing.
-    """
-    missing_cols = [col for col in required_columns if col not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Please go back and check the file '{file_name}', file may be wrong, missing columns: {', '.join(missing_cols)}")
-    return True
+
 
 
 from datetime import datetime

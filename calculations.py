@@ -493,18 +493,7 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
     emp_abnormal['Date'] = emp_abnormal['Date'].apply(normalize_date)
     emp_report['Date'] = emp_report['Date'].apply(normalize_date)
     
-    # We need Period in emp_swipes for joining
-    def get_period(start_t):
-        if pd.isna(start_t): return ""
-        try:
-            h = int(str(start_t).split(':')[0])
-            if h < 12: return "早診"
-            if h < 18: return "午診"
-            return "晚診"
-        except:
-            return ""
-            
-    emp_swipes['Period'] = emp_swipes['Start Time'].apply(get_period)
+
     
     # Calculate Late Time from Swipes
     def calc_late_time(row):

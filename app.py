@@ -12,22 +12,22 @@ st.title("Employee Attendance System")
 st.sidebar.header("Upload Data")
 
 attendance_file = st.sidebar.file_uploader("1. Attendance Report (考勤報表)", type=['xls', 'xlsx'])
-abnormal_file = st.sidebar.file_uploader("2. Abnormal Stats (異常考勤統計表)", type=['xls', 'xlsx'])
-report_file = st.sidebar.file_uploader("3. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv', 'xlsx'])
+# abnormal_file = st.sidebar.file_uploader("2. Abnormal Stats (異常考勤統計表)", type=['xls', 'xlsx'])
+report_file = st.sidebar.file_uploader("2. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv', 'xlsx'])
 
 if st.sidebar.button("Analyze Data"):
-    if not (attendance_file and abnormal_file and report_file):
-        st.error("Please upload Attendance Report, Abnormal Stats, and Overtime Report to proceed.")
+    if not (attendance_file and report_file):
+        st.error("Please upload Attendance Report and Overtime Report to proceed.")
     else:
         with st.spinner("Processing files..."):
             try:
                 # 1. Read files
                 attendance_file.seek(0)
-                abnormal_file.seek(0)
+                # abnormal_file.seek(0)
                 report_file.seek(0)
                 
                 attendance_df = calculations.read_file_by_extension(attendance_file)
-                abnormal_df = calculations.read_file_by_extension(abnormal_file)
+                # abnormal_df = calculations.read_file_by_extension(abnormal_file)
                 report_df = calculations.read_file_by_extension(report_file)
                 
 
@@ -36,15 +36,15 @@ if st.sidebar.button("Analyze Data"):
                 validation.validate_attendance_report(attendance_df, attendance_file.name)
                 
                 # Preprocess abnormal stats to fix headers, then validate
-                abnormal_df = calculations.preprocess_abnormal_stats(abnormal_df)
-                validation.validate_abnormal_stats(abnormal_df, abnormal_file.name)
+                # abnormal_df = calculations.preprocess_abnormal_stats(abnormal_df)
+                # validation.validate_abnormal_stats(abnormal_df, abnormal_file.name)
                 
                 # Overtime Report validation
                 validation.validate_overtime_report(report_df, report_file.name)
 
                 # 3. Parse Data
                 parsed_attendance = calculations.parse_attendance_report(attendance_df)
-                parsed_abnormal = calculations.parse_abnormal_stats(abnormal_df)
+                # parsed_abnormal = calculations.parse_abnormal_stats(abnormal_df)
                 parsed_report = calculations.parse_overtime_leave_report(report_df)
                 
                 # =========================== Test ===========================
@@ -67,7 +67,7 @@ if st.sidebar.button("Analyze Data"):
                 # Cache data
                 st.session_state['data_loaded'] = True
                 st.session_state['attendance'] = parsed_attendance
-                st.session_state['abnormal'] = parsed_abnormal
+                # st.session_state['abnormal'] = parsed_abnormal
                 st.session_state['report'] = parsed_report
                 
                 # Get employee list
@@ -93,7 +93,7 @@ if st.session_state.get('data_loaded'):
         if selected_emp:
             # Generate Summary
             attendance = st.session_state['attendance']
-            abnormal = st.session_state['abnormal']
+            # abnormal = st.session_state['abnormal']
             report = st.session_state['report']
 
             # =========================== Test ===========================
@@ -109,7 +109,8 @@ if st.session_state.get('data_loaded'):
 
             # =========================== Test ===========================
             
-            summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
+            # summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
+            summary_data = calculations.generate_employee_summary(selected_emp, attendance, report)
             
             # Display Tables
             st.markdown("### Monthly Report")

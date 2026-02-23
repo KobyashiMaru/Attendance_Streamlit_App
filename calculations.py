@@ -462,14 +462,15 @@ def parse_overtime_leave_report(df):
 
 
 
-def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtime_df):
+# def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtime_df):
+def generate_employee_summary(employee_name, attendance_df, overtime_df):
     """
     Aggregates data for the specific employee.
     Returns a dictionary of DataFrames.
     """
     # Filter by employee
     emp_swipes = attendance_df[attendance_df['Employee'] == employee_name].copy()
-    emp_abnormal = abnormal_df[abnormal_df['Employee'] == employee_name].copy()
+    # emp_abnormal = abnormal_df[abnormal_df['Employee'] == employee_name].copy()
     emp_report = overtime_df[overtime_df['Employee'] == employee_name].copy()
 
     def normalize_date(d):
@@ -482,7 +483,7 @@ def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtim
         return d
         
     emp_swipes['Date'] = emp_swipes['Date'].apply(normalize_date)
-    emp_abnormal['Date'] = emp_abnormal['Date'].apply(normalize_date)
+    # emp_abnormal['Date'] = emp_abnormal['Date'].apply(normalize_date)
     emp_report['Date'] = emp_report['Date'].apply(normalize_date)
     
 

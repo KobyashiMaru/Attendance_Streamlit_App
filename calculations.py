@@ -46,7 +46,7 @@ def read_file_by_extension(uploaded_file):
 from datetime import datetime
 import re
 
-def parse_attendance_report(df_or_dict):
+def parse_attendance_report(df_or_dict, metadata):
     """
     Parses the Attendance Report dataframe or dictionary of dataframes.
     """
@@ -149,20 +149,56 @@ def parse_attendance_report(df_or_dict):
                         try:
                             t1 = datetime.strptime(start_time_str, fmt)
                             t2 = datetime.strptime(end_time_str, fmt)
-                            duration_min = (t2 - t1).total_seconds() / 60
+                            
+                            # Adjust based on metadata
+                            if period_name == "早診":
+                                p_start = datetime.strptime(metadata['morning_start'], fmt)
+                                p_end = datetime.strptime(metadata['morning_end'], fmt)
+                                p_late = datetime.strptime(metadata['morning_late'], fmt)
+                                
+                                if t1 <= p_late:
+                                    eff_start = p_start
+                                else:
+                                    eff_start = t1
+                                
+                                eff_end = min(t2, p_end)
+                                
+                            elif period_name == "晚診":
+                                p_start = datetime.strptime(metadata['night_start'], fmt)
+                                p_end = datetime.strptime(metadata['night_end'], fmt)
+                                p_late = datetime.strptime(metadata['night_late'], fmt)
+                                
+                                if t1 <= p_late:
+                                    eff_start = p_start
+                                else:
+                                    eff_start = t1
+                                
+                                eff_end = min(t2, p_end)
+                            else:
+                                eff_start = t1
+                                eff_end = t2
+                                
+                            duration_min = (eff_end - eff_start).total_seconds() / 60
                             if duration_min < 0:
-                                duration_min += 24 * 60
+                                duration_min = 0
                             duration_hr = duration_min / 60.0
+                            
+                            adj_start_str = eff_start.strftime(fmt)
+                            adj_end_str = eff_end.strftime(fmt)
                         except:
                             duration_hr = 0
                             duration_min = 0
+                            adj_start_str = start_time_str
+                            adj_end_str = end_time_str
                         
                         records.append({
                             'Employee': employee,
                             'Date': date_str,
                             'Period': period_name,
                             'Start Time': start_time_str,
+                            'Adjusted Start Time': adj_start_str,
                             'End Time': end_time_str,
+                            'Adjusted End Time': adj_end_str,
                             'Total Duration (hr)': round(duration_hr, 2),
                             'Total Duration (min)': duration_min
                         })
@@ -463,7 +499,7 @@ def parse_overtime_leave_report(df):
 
 
 # def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtime_df):
-def generate_employee_summary(employee_name, attendance_df, overtime_df):
+def generate_employee_summary(employee_name, attendance_df, overtime_df, metadata):
     """
     Aggregates data for the specific employee.
     Returns a dictionary of DataFrames.
@@ -497,11 +533,11 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df):
             # We match formats like '08:00' or similar clock-in strings
             dt = datetime.strptime(str(start_t), "%H:%M")
             if period == "早診":
-                threshold = datetime.strptime("08:05", "%H:%M")
+                threshold = datetime.strptime(metadata['morning_late'], "%H:%M")
                 if dt > threshold:
                     return (dt - threshold).total_seconds() / 60
             elif period == "晚診":
-                threshold = datetime.strptime("16:05", "%H:%M")
+                threshold = datetime.strptime(metadata['night_late'], "%H:%M")
                 if dt > threshold:
                     return (dt - threshold).total_seconds() / 60
         except:
@@ -531,11 +567,11 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df):
         try:
             dt = datetime.strptime(str(end_t), "%H:%M")
             if '早診' in str(period):
-                threshold = datetime.strptime("12:10", "%H:%M")
+                threshold = datetime.strptime(metadata['morning_ot_start'], "%H:%M")
                 if dt > threshold:
                     return (dt - threshold).total_seconds() / 60
             elif '晚診' in str(period):
-                threshold = datetime.strptime("20:10", "%H:%M")
+                threshold = datetime.strptime(metadata['night_ot_start'], "%H:%M")
                 if dt > threshold:
                     return (dt - threshold).total_seconds() / 60
         except:
@@ -545,7 +581,15 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df):
     if not ot_merged.empty:
         ot_merged['Elapsed Minutes'] = ot_merged.apply(calc_overtime, axis=1)
         ot_merged['End Time'] = ot_merged['End Time_swipe']
-        ot_merged['Start Time'] = ot_merged['Start Time_swipe'] # Fill in the actual start time as well just in case
+        
+        def get_ot_start(period):
+            if '早診' in str(period):
+                return metadata['morning_ot_start']
+            elif '晚診' in str(period):
+                return metadata['night_ot_start']
+            return ""
+            
+        ot_merged['Start Time'] = ot_merged['Period'].apply(get_ot_start)
         ot_records = ot_merged.drop(columns=['End Time_swipe', 'Start Time_swipe'])
     else:
         ot_records['Elapsed Minutes'] = 0
@@ -584,13 +628,13 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df):
     }])
     
     # 3. Overtime Detail
-    overtime_detail = ot_records[['Date', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note']] if not ot_records.empty else pd.DataFrame(columns=['Date', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note'])
+    overtime_detail = ot_records[['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note']] if not ot_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note'])
     
     # 4. Leave Details
     leave_detail = leave_records[['Date', 'Period', 'Leave Type', 'Reason']].rename(columns={'Leave Type': 'Type'}) if not leave_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Type', 'Reason'])
     
     # 5. Duty Time Entries
-    duty_entries = emp_swipes[['Date', 'Period', 'Start Time', 'End Time', 'Total Duration (hr)', 'Late Duration (min)']].copy()
+    duty_entries = emp_swipes[['Date', 'Period', 'Start Time', 'Adjusted Start Time', 'End Time', 'Adjusted End Time', 'Total Duration (hr)', 'Late Duration (min)']].copy()
     
     if not ot_records.empty:
         daily_ot = ot_records.groupby(['Date', 'Period'])['Elapsed Minutes'].sum().reset_index()
@@ -605,7 +649,7 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df):
     duty_entries['Overtime Duration (min)'] = duty_entries['Overtime Duration (min)'].fillna(0)
     
     # Reorder columns
-    duty_entries = duty_entries[['Date', 'Period', 'Start Time', 'End Time', 'Total Duration (hr)', 'Overtime Duration (min)', 'Late Duration (min)']].fillna(0)
+    duty_entries = duty_entries[['Date', 'Period', 'Start Time', 'Adjusted Start Time', 'End Time', 'Adjusted End Time', 'Total Duration (hr)', 'Overtime Duration (min)', 'Late Duration (min)']].fillna(0)
     
     # 5. Visit Entries
     

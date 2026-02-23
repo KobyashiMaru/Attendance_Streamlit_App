@@ -3,10 +3,61 @@ import pandas as pd
 import calculations
 import validation
 import time
+import json
+import os
+
+CONFIG_FILE = "config.json"
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    return {
+        'morning_start': '08:00',
+        'morning_end': '12:00',
+        'morning_ot_start': '12:10',
+        'morning_late': '08:05',
+        'night_start': '16:00',
+        'night_end': '20:00',
+        'night_ot_start': '16:10',
+        'night_late': '08:05'
+    }
+
+def save_config(config):
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f)
 
 st.set_page_config(page_title="Employee Attendance System", layout="wide")
 
 st.title("Employee Attendance System")
+
+
+# Sidebar for Metadata
+st.sidebar.header("Metadata")
+
+config = load_config()
+
+with st.sidebar.expander("Metadata"):
+    m_start = st.text_input("Morning Period Start Time", value=config.get('morning_start', '08:00'))
+    m_end = st.text_input("Morning Period End Time", value=config.get('morning_end', '12:00'))
+    m_ot_start = st.text_input("Morning Period Overtime Start Time", value=config.get('morning_ot_start', '12:10'))
+    m_late = st.text_input("Morning Period Late Start Time", value=config.get('morning_late', '08:05'))
+    
+    n_start = st.text_input("Night Period Start Time", value=config.get('night_start', '16:00'))
+    n_end = st.text_input("Night Period End Time", value=config.get('night_end', '20:00'))
+    n_ot_start = st.text_input("Night Period Overtime Start Time", value=config.get('night_ot_start', '20:10'))
+    n_late = st.text_input("Night Period Late Start Time", value=config.get('night_late', '16:05'))
+    
+    metadata = {
+        'morning_start': m_start,
+        'morning_end': m_end,
+        'morning_ot_start': m_ot_start,
+        'morning_late': m_late,
+        'night_start': n_start,
+        'night_end': n_end,
+        'night_ot_start': n_ot_start,
+        'night_late': n_late
+    }
+
 
 # Sidebar for File Uploads
 st.sidebar.header("Upload Data")
@@ -15,8 +66,12 @@ attendance_file = st.sidebar.file_uploader("1. Attendance Report (考勤報表)"
 # abnormal_file = st.sidebar.file_uploader("2. Abnormal Stats (異常考勤統計表)", type=['xls', 'xlsx'])
 report_file = st.sidebar.file_uploader("2. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv', 'xlsx'])
 
+
 if st.sidebar.button("Analyze Data"):
-    if not (attendance_file and report_file):
+    save_config(metadata)
+    if any(not val or not str(val).strip() for val in metadata.values()):
+        st.error("Please fill in all Metadata fields to proceed.")
+    elif not (attendance_file and report_file):
         st.error("Please upload Attendance Report and Overtime Report to proceed.")
     else:
         with st.spinner("Processing files..."):
@@ -43,7 +98,7 @@ if st.sidebar.button("Analyze Data"):
                 validation.validate_overtime_report(report_df, report_file.name)
 
                 # 3. Parse Data
-                parsed_attendance = calculations.parse_attendance_report(attendance_df)
+                parsed_attendance = calculations.parse_attendance_report(attendance_df, metadata)
                 # parsed_abnormal = calculations.parse_abnormal_stats(abnormal_df)
                 parsed_report = calculations.parse_overtime_leave_report(report_df)
                 
@@ -110,7 +165,7 @@ if st.session_state.get('data_loaded'):
             # =========================== Test ===========================
             
             # summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
-            summary_data = calculations.generate_employee_summary(selected_emp, attendance, report)
+            summary_data = calculations.generate_employee_summary(selected_emp, attendance, report, metadata)
             
             # Display Tables
             st.markdown("### Monthly Report")

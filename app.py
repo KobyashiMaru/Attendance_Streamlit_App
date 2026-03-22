@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
-import calculations
-import validation
+from modules import calculations
+from modules import validation
 import time
 import json
 import os
+from modules import pdf_report
+from modules import calendar_ui as custom_calendar
 
 CONFIG_FILE = "config.json"
 def load_config():
@@ -66,8 +68,15 @@ attendance_file = st.sidebar.file_uploader("1. Attendance Report (考勤報表)"
 # abnormal_file = st.sidebar.file_uploader("2. Abnormal Stats (異常考勤統計表)", type=['xls', 'xlsx'])
 report_file = st.sidebar.file_uploader("2. Overtime Report (加班報表)", type=['tsv', 'txt', 'csv', 'xlsx'])
 
+analyze_clicked = st.sidebar.button("Analyze Data")
+calendar_clicked = st.sidebar.button("Show Calendar")
 
-if st.sidebar.button("Analyze Data"):
+if analyze_clicked or calendar_clicked:
+    if analyze_clicked:
+        st.session_state['view_mode'] = 'report'
+    elif calendar_clicked:
+        st.session_state['view_mode'] = 'calendar'
+        
     save_config(metadata)
     if any(not val or not str(val).strip() for val in metadata.values()):
         st.error("Please fill in all Metadata fields to proceed.")
@@ -138,64 +147,92 @@ if st.sidebar.button("Analyze Data"):
 
 # Main Area
 if st.session_state.get('data_loaded'):
-    employees = st.session_state.get('employees', [])
+    view_mode = st.session_state.get('view_mode', 'report')
     
-    if not employees:
-        st.warning("No employees found in the data.")
-    else:
-        selected_emp = st.selectbox("Select Employee", employees)
+    if view_mode == 'calendar':
+        st.markdown("### Employee Leave Calendar")
+        report = st.session_state['report']
         
-        if selected_emp:
-            # Generate Summary
-            attendance = st.session_state['attendance']
-            # abnormal = st.session_state['abnormal']
-            report = st.session_state['report']
+        custom_calendar.render_calendar(report, metadata)
 
-            # =========================== Test ===========================
-
-            # print("attendance: ")
-            # print(attendance.head())
-
-            # print("abnormal:")
-            # print(abnormal.head())
-
-            # print("report:")
-            # print(report.head())
-
-            # =========================== Test ===========================
+    elif view_mode == 'report':
+        employees = st.session_state.get('employees', [])
+        
+        if not employees:
+            st.warning("No employees found in the data.")
+        else:
+            selected_emp = st.selectbox("Select Employee", employees)
             
-            # summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
-            summary_data = calculations.generate_employee_summary(selected_emp, attendance, report, metadata)
-            
-            # Display Tables
-            st.markdown("### Monthly Report")
-            st.dataframe(summary_data['Monthly Report'], hide_index=True)
-            
-            row1_col1, row1_col2 = st.columns(2)
-            with row1_col1:
-                 st.markdown("### Overtime Detail")
-                 st.dataframe(summary_data['Overtime Detail'], hide_index=True)
-            with row1_col2:
-                 st.markdown("### Leave Details")
-                 st.dataframe(summary_data['Leave Details'], hide_index=True)
-            
-            st.markdown("### Duty Time Entries")
-            st.dataframe(summary_data['Duty Time Entries'], hide_index=True)
-            
-            row2_col1, row2_col2 = st.columns(2)
-            with row2_col1:
-                st.markdown("### Visit Entries")
-                st.dataframe(summary_data['Visit Entries'], hide_index=True)
-            with row2_col2:
-                st.markdown("### Visit Weekly Summary")
-                st.dataframe(summary_data['Visit Weekly Summary'], hide_index=True)
-            
-            # Download Button
-            excel_data = calculations.generate_excel_download(selected_emp, summary_data)
-            st.download_button(
-                label="Download Excel Report",
-                data=excel_data,
-                file_name=f"{selected_emp}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
+            if selected_emp:
+                # Generate Summary
+                attendance = st.session_state['attendance']
+                # abnormal = st.session_state['abnormal']
+                report = st.session_state['report']
+    
+                # =========================== Test ===========================
+    
+                # print("attendance: ")
+                # print(attendance.head())
+    
+                # print("abnormal:")
+                # print(abnormal.head())
+    
+                # print("report:")
+                # print(report.head())
+    
+                # =========================== Test ===========================
+                
+                # summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
+                summary_data = calculations.generate_employee_summary(selected_emp, attendance, report, metadata)
+                
+                # Display Tables
+                st.markdown("### Monthly Report")
+                st.dataframe(summary_data['Monthly Report'], hide_index=True)
+                
+                row1_col1, row1_col2 = st.columns(2)
+                with row1_col1:
+                     st.markdown("### Overtime Detail")
+                     st.dataframe(summary_data['Overtime Detail'], hide_index=True)
+                with row1_col2:
+                     st.markdown("### Leave Details")
+                     st.dataframe(summary_data['Leave Details'], hide_index=True)
+                
+                st.markdown("### Duty Time Entries")
+                st.dataframe(summary_data['Duty Time Entries'], hide_index=True)
+                
+                row2_col1, row2_col2 = st.columns(2)
+                with row2_col1:
+                    st.markdown("### Visit Entries")
+                    st.dataframe(summary_data['Visit Entries'], hide_index=True)
+                with row2_col2:
+                    st.markdown("### Visit Weekly Summary")
+                    st.dataframe(summary_data['Visit Weekly Summary'], hide_index=True)
+                
+                # Download Button
+                excel_data = calculations.generate_excel_download(selected_emp, summary_data)
+                st.download_button(
+                    label="Download Excel Report",
+                    data=excel_data,
+                    file_name=f"{selected_emp}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                # # Use st.columns to put both buttons on the same row
+                # btn_col1, btn_col2 = st.columns(2)
+                
+                # with btn_col1:
+                #     st.download_button(
+                #         label="Download Excel Report",
+                #         data=excel_data,
+                #         file_name=f"{selected_emp}.xlsx",
+                #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                #     )
+                
+                # with btn_col2:
+                #     # Generate PDF data
+                #     pdf_bytes = pdf_report.generate_pdf_report(selected_emp, summary_data)
+                #     st.download_button(
+                #         label="Download PDF Report",
+                #         data=pdf_bytes,
+                #         file_name=f"{selected_emp}.pdf",
+                #         mime="application/pdf"
+                #     )

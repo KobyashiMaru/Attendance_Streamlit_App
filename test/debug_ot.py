@@ -1,6 +1,8 @@
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pandas as pd
-from app import load_data
-from calculations import read_file_by_extension, parse_attendance_report, parse_abnormal_stats, parse_overtime_leave_report, generate_employee_summary
+
+from modules.calculations import read_file_by_extension, parse_attendance_report, parse_abnormal_stats, parse_overtime_leave_report, generate_employee_summary
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -15,7 +17,18 @@ for sheet in matching_sheets:
 abnormal_raw = pd.read_excel('/Users/hao/hao/random_shit/clinic/data/1_(2月)異常考勤統計表.xls', engine='xlrd')
 overtime_raw = pd.read_excel('/Users/hao/hao/random_shit/clinic/data/上班時數表單 (回覆).xlsx', engine='openpyxl')
 
-attendance_df = parse_attendance_report(attendance_raw)
+metadata = {
+    'morning_start': '08:00',
+    'morning_end': '12:00',
+    'morning_ot_start': '12:10',
+    'morning_late': '08:05',
+    'night_start': '16:00',
+    'night_end': '20:00',
+    'night_ot_start': '16:10',
+    'night_late': '08:05'
+}
+
+attendance_df = parse_attendance_report(attendance_raw, metadata)
 abnormal_df = parse_abnormal_stats(abnormal_raw)
 overtime_df = parse_overtime_leave_report(overtime_raw)
 
@@ -28,7 +41,7 @@ ot_emps = overtime_df[overtime_df['Type'] == 'Overtime']['Employee'].unique()
 if list(ot_emps):
     emp = ot_emps[0]
     print(f"\nDebugging for {emp}...")
-    res = generate_employee_summary(emp, attendance_df, abnormal_df, overtime_df)
+    res = generate_employee_summary(emp, attendance_df, overtime_df, metadata)
     print("Overtime Detail:")
     print(res['Overtime Detail'])
     

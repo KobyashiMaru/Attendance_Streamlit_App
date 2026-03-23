@@ -5,6 +5,10 @@ from modules import validation
 import time
 import json
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from modules import pdf_report
 from modules import calendar_ui as custom_calendar
 
@@ -32,6 +36,13 @@ st.set_page_config(page_title="Employee Attendance System", layout="wide")
 
 st.title("Employee Attendance System")
 
+# Google Sheet Link on top of Sidebar
+google_sheet_url = os.getenv("GOOGLE_SHEET_URL")
+if google_sheet_url:
+    # Sidebar for Google Sheet
+    st.sidebar.header("Google Sheet")
+    st.sidebar.markdown(f"[📊 Open Google Sheet]({google_sheet_url})")
+    # st.sidebar.markdown("---")
 
 # Sidebar for Metadata
 st.sidebar.header("Metadata")

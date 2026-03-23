@@ -555,6 +555,12 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
 
     # Calculate Overtime from Swipes
     ot_records = emp_report_filtered[emp_report_filtered['Type'] == 'Overtime'].copy()
+    if not ot_records.empty:
+        ot_records['Validity'] = ot_records['Patient/Note'].apply(
+            lambda x: 'Invalid' if isinstance(x, str) and str(x).strip().startswith('###') else 'Valid'
+        )
+    else:
+        ot_records['Validity'] = pd.Series(dtype='object')
     
     # Merge ot_records with emp_swipes on Date and Period to get corresponding swipe End Time
     ot_merged = pd.merge(ot_records, emp_swipes[['Date', 'Period', 'End Time', 'Start Time']], on=['Date', 'Period'], how='left', suffixes=('', '_swipe'))
@@ -591,6 +597,7 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
             
         ot_merged['Start Time'] = ot_merged['Period'].apply(get_ot_start)
         ot_records = ot_merged.drop(columns=['End Time_swipe', 'Start Time_swipe'])
+        ot_records.loc[ot_records['Validity'] == 'Invalid', 'Elapsed Minutes'] = 0
     else:
         ot_records['Elapsed Minutes'] = 0
 
@@ -628,7 +635,7 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
     }])
     
     # 3. Overtime Detail
-    overtime_detail = ot_records[['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note']] if not ot_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note'])
+    overtime_detail = ot_records[['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note', 'Validity']] if not ot_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Start Time', 'End Time', 'Elapsed Minutes', 'OT Attribute', 'Patient/Note', 'Validity'])
     
     # 4. Leave Details
     leave_detail = leave_records[['Date', 'Period', 'Leave Type', 'Reason']].rename(columns={'Leave Type': 'Type'}) if not leave_records.empty else pd.DataFrame(columns=['Date', 'Period', 'Type', 'Reason'])

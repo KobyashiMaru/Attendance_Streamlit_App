@@ -122,6 +122,16 @@ if analyze_clicked or calendar_clicked:
                 # parsed_abnormal = calculations.parse_abnormal_stats(abnormal_df)
                 parsed_report = calculations.parse_overtime_leave_report(report_df)
                 
+                # Parse Shift Entries explicitly
+                try:
+                    if isinstance(attendance_df, dict) and '排班記錄表' in attendance_df:
+                        parsed_shifts = calculations.parse_shift_report(attendance_df['排班記錄表'])
+                    else:
+                        parsed_shifts = pd.DataFrame()
+                except Exception as e:
+                    st.warning(f"Could not parse Shift Entries (排班記錄表): {e}")
+                    parsed_shifts = pd.DataFrame()
+                
                 # =========================== Test ===========================
 
                 # print("attendance_file: ")
@@ -144,6 +154,7 @@ if analyze_clicked or calendar_clicked:
                 st.session_state['attendance'] = parsed_attendance
                 # st.session_state['abnormal'] = parsed_abnormal
                 st.session_state['report'] = parsed_report
+                st.session_state['shifts'] = parsed_shifts
                 
                 # Get employee list
                 employees = sorted(list(set(parsed_attendance['Employee'].dropna().unique()) | set(parsed_report['Employee'].dropna().unique())))
@@ -194,8 +205,13 @@ if st.session_state.get('data_loaded'):
                 # =========================== Test ===========================
                 
                 # summary_data = calculations.generate_employee_summary(selected_emp, attendance, abnormal, report)
-                summary_data = calculations.generate_employee_summary(selected_emp, attendance, report, metadata)
+                summary_data = calculations.generate_employee_summary(selected_emp, attendance, report, metadata, st.session_state.get('shifts', pd.DataFrame()))
                 
+                # Display Warnings
+                if 'Warnings' in summary_data and summary_data['Warnings']:
+                    for w in summary_data['Warnings']:
+                        st.warning(w)
+
                 # Display Tables
                 st.markdown("### Monthly Report")
                 st.dataframe(summary_data['Monthly Report'], hide_index=True)
@@ -210,6 +226,9 @@ if st.session_state.get('data_loaded'):
                 
                 st.markdown("### Duty Time Entries")
                 st.dataframe(summary_data['Duty Time Entries'], hide_index=True)
+                
+                st.markdown("### Shift Entries")
+                st.dataframe(summary_data.get('Shift Entries', pd.DataFrame()), hide_index=True)
                 
                 row2_col1, row2_col2 = st.columns(2)
                 with row2_col1:

@@ -14,10 +14,17 @@ def generate_pdf_report(selected_emp, summary_data):
         markdown_content = f"# {selected_emp} Attendance Report\n\n"
         markdown_content += f"## {table_name}\n\n"
         
-        if not df.empty:
-            markdown_content += df.to_markdown(index=False) + "\n\n"
+        if table_name == 'Warnings':
+            if df:
+                warnings_df = pd.DataFrame({'Warnings': df})
+                markdown_content += warnings_df.to_markdown(index=False) + "\n\n"
+            else:
+                markdown_content += "No warnings.\n\n"
         else:
-            markdown_content += "No data available.\n\n"
+            if not df.empty:
+                markdown_content += df.to_markdown(index=False) + "\n\n"
+            else:
+                markdown_content += "No data available.\n\n"
 
         # Add a section for each table (automatically creates a page break)
         pdf.add_section(Section(markdown_content))

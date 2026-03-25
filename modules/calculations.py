@@ -9,9 +9,8 @@ def read_file_by_extension(uploaded_file):
     filename = uploaded_file.name
     try:
         if filename.endswith('.xls') or filename.endswith('.xlsx'):
-            engine = 'xlrd' if filename.endswith('.xls') else 'openpyxl'
-            # Check sheet names first
-            xl = pd.ExcelFile(uploaded_file, engine=engine)
+            # Check sheet names first (let Pandas auto-detect the engine from the file bytes)
+            xl = pd.ExcelFile(uploaded_file)
             # Find sheets matching Employee ID pattern: digits,digits,digits
             import re
             pattern = re.compile(r'^\d+(,\d+)*$')
@@ -23,6 +22,10 @@ def read_file_by_extension(uploaded_file):
                 dfs = {}
                 for sheet in matching_sheets:
                     dfs[sheet] = xl.parse(sheet, header=None)
+                
+                if '排班記錄表' in xl.sheet_names:
+                    dfs['排班記錄表'] = xl.parse('排班記錄表', header=None)
+                    
                 return dfs
             else:
                 return xl.parse(0) # Default single sheet
@@ -59,6 +62,8 @@ def parse_attendance_report(df_or_dict, metadata):
         sheet_dict = {"Unknown": df_or_dict}
 
     for sheet_name, df in sheet_dict.items():
+        if sheet_name == '排班記錄表':
+            continue
         # A single sheet has multiple employee blocks, e.g., base_col at 0, 15, 30
         rows = df.values.tolist()
         num_cols = len(df.columns)
@@ -204,6 +209,77 @@ def parse_attendance_report(df_or_dict, metadata):
                         })
 
     return pd.DataFrame(records)
+
+
+def parse_shift_report(df):
+    try:
+        # Month
+        date_str = str(df.iloc[1, 0])
+        match = re.search(r'(\d{4}-\d{2})', date_str)
+        if not match:
+            raise ValueError("Could not find Year-Month pattern in shift report.")
+        year_month = match.group(1)
+        
+        # Dates from row index 2
+        date_row = df.iloc[2].values
+        dates = []
+        col_indices = []
+        last_date = -1
+        
+        for i, val in enumerate(date_row):
+            if i < 3: continue # skip 員工號 姓名 所屬部門
+            if pd.isna(val) or val == '' or str(val) == 'nan':
+                break
+            try:
+                curr_date = int(val)
+                if curr_date > last_date:
+                    dates.append(curr_date)
+                    col_indices.append(i)
+                    last_date = curr_date
+                else:
+                    break # Not monotonically increasing
+            except ValueError:
+                break
+                
+        # Read employees from row 4 onwards
+        records = []
+        for idx in range(4, len(df)):
+            row = df.iloc[idx]
+            name = str(row[1]).strip()
+            if pd.isna(name) or name == 'nan' or name == '':
+                continue
+                
+            for d, col_idx in zip(dates, col_indices):
+                date_formatted = f"{year_month}-{d:02d}"
+                cell_val = row[col_idx]
+                
+                morning_period_value = 0
+                afternoon_period_value = 0
+                night_period_value = 0
+                
+                if pd.notna(cell_val) and str(cell_val).strip() != 'nan':
+                    try:
+                        val = int(float(cell_val))
+                        if val == 1:
+                            morning_period_value = 1
+                        elif val == 2:
+                            morning_period_value = 1
+                            night_period_value = 1
+                    except ValueError:
+                        pass # Ignore or throw error based on plan
+                        
+                records.append({
+                    'Name': name,
+                    'Date': date_formatted,
+                    '早診': morning_period_value,
+                    '午診': afternoon_period_value,
+                    '晚診': night_period_value
+                })
+        
+        return pd.DataFrame(records)
+    except Exception as e:
+        print(f"Error parse_shift_report: {e}")
+        return pd.DataFrame()
 
 
 def preprocess_abnormal_stats(df):
@@ -499,7 +575,7 @@ def parse_overtime_leave_report(df):
 
 
 # def generate_employee_summary(employee_name, attendance_df, abnormal_df, overtime_df):
-def generate_employee_summary(employee_name, attendance_df, overtime_df, metadata):
+def generate_employee_summary(employee_name, attendance_df, overtime_df, metadata, shift_df=None):
     """
     Aggregates data for the specific employee.
     Returns a dictionary of DataFrames.
@@ -670,6 +746,22 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
         visit_weekly = visit_entries_calc.groupby('Week')['Total Duration (hr)'].sum().reset_index()
     else:
         visit_weekly = pd.DataFrame(columns=['Week', 'Total Duration (hr)'])
+        
+    # Validation against Shifts
+    warnings = []
+    filtered_shift = pd.DataFrame()
+    if shift_df is not None and not shift_df.empty:
+        filtered_shift = shift_df[shift_df['Name'] == employee_name].copy()
+        if not filtered_shift.empty:
+            filtered_shift = filtered_shift.drop(columns=['Name'])
+            
+            # Run validations
+            from modules.validation import validate_duty_with_shifts, validate_leave_with_shifts
+            # Duty needs Date, Period
+            w1 = validate_duty_with_shifts(duty_entries, leave_detail, filtered_shift, employee_name)
+            w2 = validate_leave_with_shifts(leave_detail, filtered_shift, employee_name)
+            warnings.extend(w1)
+            warnings.extend(w2)
     
     return {
         'Monthly Report': monthly_report,
@@ -677,7 +769,9 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
         'Leave Details': leave_detail,
         'Duty Time Entries': duty_entries,
         'Visit Entries': visit_entries,
-        'Visit Weekly Summary': visit_weekly
+        'Visit Weekly Summary': visit_weekly,
+        'Shift Entries': filtered_shift,
+        'Warnings': warnings
     }
 
 def generate_excel_download(employee_name, summary_data):
@@ -688,6 +782,10 @@ def generate_excel_download(employee_name, summary_data):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for sheet_name, df in summary_data.items():
+            if sheet_name == 'Warnings':
+                if not df: continue
+                pd.DataFrame({'Warnings': df}).to_excel(writer, sheet_name=sheet_name, index=False)
+                continue
             # Truncate sheet name to 31 chars if needed
             safe_sheet_name = sheet_name[:31]
             df.to_excel(writer, sheet_name=safe_sheet_name, index=False)

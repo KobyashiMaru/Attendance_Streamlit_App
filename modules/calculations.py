@@ -1,5 +1,8 @@
 import pandas as pd
 import io
+from modules.validation import validate_duty_with_shifts, validate_leave_with_shifts
+import re
+
 
 def read_file_by_extension(uploaded_file):
     """
@@ -12,7 +15,6 @@ def read_file_by_extension(uploaded_file):
             # Check sheet names first (let Pandas auto-detect the engine from the file bytes)
             xl = pd.ExcelFile(uploaded_file)
             # Find sheets matching Employee ID pattern: digits,digits,digits
-            import re
             pattern = re.compile(r'^\d+(,\d+)*$')
             matching_sheets = [s for s in xl.sheet_names if pattern.match(s)]
             
@@ -756,7 +758,6 @@ def generate_employee_summary(employee_name, attendance_df, overtime_df, metadat
             filtered_shift = filtered_shift.drop(columns=['Name'])
             
             # Run validations
-            from modules.validation import validate_duty_with_shifts, validate_leave_with_shifts
             # Duty needs Date, Period
             w1 = validate_duty_with_shifts(duty_entries, leave_detail, filtered_shift, employee_name)
             w2 = validate_leave_with_shifts(leave_detail, filtered_shift, employee_name)
@@ -781,10 +782,12 @@ def generate_excel_download(employee_name, summary_data):
     """
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Write Warnings sheet first if it exists and is not empty
+        if 'Warnings' in summary_data and summary_data['Warnings']:
+            pd.DataFrame({'Warnings': summary_data['Warnings']}).to_excel(writer, sheet_name='Warnings', index=False)
+            
         for sheet_name, df in summary_data.items():
             if sheet_name == 'Warnings':
-                if not df: continue
-                pd.DataFrame({'Warnings': df}).to_excel(writer, sheet_name=sheet_name, index=False)
                 continue
             # Truncate sheet name to 31 chars if needed
             safe_sheet_name = sheet_name[:31]

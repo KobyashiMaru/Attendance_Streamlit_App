@@ -6,3 +6,4 @@ markdown-pdf
 tabulate
 streamlit-calendar
 python-dotenv
+pytest

@@ -8,7 +8,7 @@ This is used for calculating clinic attendance
 
   * I think we should leave it as manual inspections, so we decide not to do this at this point
 * [X] Add the `Metadata` section in UI sidebar to let user to enter `Period Start Time`, `Period End Time`, `Period Overtime Start Time`, `Period Late Start Time`, and implement a memory feature so users don't have to enter over and over again. Use a `config.json` to store metadata when hitting `Analyze Data` button
-* [ ] Create an icon for the app (windows: `.ico`, mac: `.icn`)
+* [X] Create an icon for the app (windows: `.ico`, mac: `.icn`)
 * [X] Add a `Show Calendar` button on sidebar. After hitting it, it shows a calendar object, and show all of leave records for all employee. (Use [streamlit-calendar](https://github.com/im-perativa/streamlit-calendar))
 * [X] Add google sheet URL in the UI
 * [ ] ~~If we find overtime records in `On Duty Entries` , but there are no records on `Overtime Details`, then we show a yellow warning message that there are records missing or need to be fixed. If not, we don't count those overtime duration~~

@@ -1,6 +1,6 @@
 {
     "name": "attendance-app",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Streamlit application for clinic attendance and overtime calculation.",
     "author": "Chun-Hao Hung",
     "main": "./build/electron/main.js",
@@ -17,6 +17,19 @@
         ],
         "directories": {
             "buildResources": "assets"
+        },
+        "win": {
+            "icon": "icon/S__16252937.ico",
+            "target": [
+                {
+                    "target": "portable",
+                    "arch": ["arm64"]
+                },
+                {
+                    "target": "dir",
+                    "arch": ["arm64"]
+                }
+            ]
         }
     },
     "devDependencies": {
@@ -29,8 +42,7 @@
         "desktop": {
             "files": [
                 "app.py",
-                "calculations.py",
-                "validation.py",
+                "modules/**/*",
                 "requirements.txt",
                 "config.json"
             ],

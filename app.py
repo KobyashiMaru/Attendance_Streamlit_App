@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from modules import pdf_report
+# from modules import pdf_report
 from modules import calendar_ui as custom_calendar
 
 CONFIG_FILE = "config.json"

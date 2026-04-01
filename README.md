@@ -11,7 +11,7 @@ This is used for calculating clinic attendance
 * [ ] Create an icon for the app (windows: `.ico`, mac: `.icn`)
 * [X] Add a `Show Calendar` button on sidebar. After hitting it, it shows a calendar object, and show all of leave records for all employee. (Use [streamlit-calendar](https://github.com/im-perativa/streamlit-calendar))
 * [X] Add google sheet URL in the UI
-* [ ] ~~ If we find overtime records in `On Duty Entries` , but there are no records on `Overtime Details`, then we show a yellow warning message that there are records missing or need to be fixed. If not, we don't count those overtime duration~~
+* [ ] ~~If we find overtime records in `On Duty Entries` , but there are no records on `Overtime Details`, then we show a yellow warning message that there are records missing or need to be fixed. If not, we don't count those overtime duration~~
 
   * I think we should leave it as manual inspections, so we decide not to do this at this point
 * [X] Check all of the entries for all inputs, we base on swiping records, and shift settings, then check overtime. If there are records missing, we show yellow warning messages highlighting users

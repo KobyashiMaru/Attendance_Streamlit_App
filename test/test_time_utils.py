@@ -112,15 +112,15 @@ class TestCalcLateTime:
 
 class TestCalcOvertime:
     def test_over_threshold(self):
-        row = pd.Series({"End Time_swipe": "12:30", "Period": "早診"})
+        row = pd.Series({"End Time": "12:30", "Period": "早診"})
         assert calc_overtime(row, METADATA) == 20.0
 
     def test_under_threshold(self):
-        row = pd.Series({"End Time_swipe": "12:05", "Period": "早診"})
+        row = pd.Series({"End Time": "12:05", "Period": "早診"})
         assert calc_overtime(row, METADATA) == 0.0
 
     def test_missing_end(self):
-        row = pd.Series({"End Time_swipe": None, "Period": "早診"})
+        row = pd.Series({"End Time": None, "Period": "早診"})
         assert calc_overtime(row, METADATA) == 0.0
 
 

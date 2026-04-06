@@ -107,8 +107,6 @@ def validate_overtime_report(df: pd.DataFrame, file_name: str) -> bool:
         "姓名",
         "回報屬性",
         "上班日期",
-        "上班時間（打卡時間）",
-        "下班時間（打卡時間）",
         "加班屬性",
         "時段",
     ]

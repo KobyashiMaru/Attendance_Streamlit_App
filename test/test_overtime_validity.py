@@ -88,17 +88,17 @@ def test_overtime_validity():
     # Assertions for Jane Doe
     print("overtime_detail_jane:\n", overtime_detail_jane[['Patient/Note', 'Validity', 'Elapsed Minutes']])
     
-    assert overtime_detail_jane['Validity'].iloc[0] == 'Invalid'
-    assert overtime_detail_jane['Elapsed Minutes'].iloc[0] == 0
+    assert overtime_detail_jane['Validity'].iloc[0] == 'Invalid by manual inspection'
+    assert overtime_detail_jane['Elapsed Minutes'].iloc[0] == 140
     
-    assert overtime_detail_jane['Validity'].iloc[1] == 'Invalid'
-    assert overtime_detail_jane['Elapsed Minutes'].iloc[1] == 0
+    assert overtime_detail_jane['Validity'].iloc[1] == 'Invalid by manual inspection'
+    assert overtime_detail_jane['Elapsed Minutes'].iloc[1] == 140
 
     assert overtime_detail_jane['Validity'].iloc[2] == 'Valid'
-    assert overtime_detail_jane['Elapsed Minutes'].iloc[2] > 0
+    assert overtime_detail_jane['Elapsed Minutes'].iloc[2] == 140
     
     assert overtime_detail_jane['Validity'].iloc[3] == 'Valid'
-    assert overtime_detail_jane['Elapsed Minutes'].iloc[3] > 0
+    assert overtime_detail_jane['Elapsed Minutes'].iloc[3] == 140
 
     # For valid overtime, the total calculated based on swipe 14:30 and ot start 12:10
     # The elapsed mins logic groups by Date/Period and assigns the entire period's valid OT mins based on swipe

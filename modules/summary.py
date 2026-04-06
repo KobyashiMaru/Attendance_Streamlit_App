@@ -51,15 +51,13 @@ def _apply_late_duration(
 
 def _build_overtime_records(
     emp_report_filtered: pd.DataFrame,
-    emp_swipes: pd.DataFrame,
-    metadata: Metadata,
+    duty_entries: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Merge overtime records with swipe data and compute elapsed minutes.
+    """Merge overtime records with duty entries and compute validity.
 
     Args:
         emp_report_filtered: Overtime/leave report rows filtered to valid dates.
-        emp_swipes: Attendance (swipe) records for one employee.
-        metadata: Period configuration dict.
+        duty_entries: Duty time entries for the employee.
 
     Returns:
         A DataFrame of overtime records with Validity and Elapsed Minutes.
@@ -69,40 +67,59 @@ def _build_overtime_records(
     ].copy()
 
     if not ot_records.empty:
-        ot_records["Validity"] = ot_records["Patient/Note"].apply(
-            lambda x: (
-                "Invalid"
-                if isinstance(x, str) and str(x).strip().startswith("###")
-                else "Valid"
-            )
-        )
-    else:
-        ot_records["Validity"] = pd.Series(dtype="object")
+        ot_records = ot_records.drop(columns=["Start Time", "End Time", "Elapsed Minutes"], errors="ignore")
 
     ot_merged = pd.merge(
         ot_records,
-        emp_swipes[["Date", "Period", "End Time", "Start Time"]],
+        duty_entries[["Date", "Period", "Start Time", "End Time", "Overtime Duration (min)"]],
         on=["Date", "Period"],
         how="left",
-        suffixes=("", "_swipe"),
     )
 
+    if "Overtime Duration (min)" in ot_merged.columns:
+        ot_merged.rename(columns={"Overtime Duration (min)": "Elapsed Minutes"}, inplace=True)
+    else:
+        ot_merged["Elapsed Minutes"] = 0
+
     if not ot_merged.empty:
-        ot_merged["Elapsed Minutes"] = ot_merged.apply(
-            lambda row: calc_overtime(row, metadata), axis=1
-        )
-        ot_merged["End Time"] = ot_merged["End Time_swipe"]
-        ot_merged["Start Time"] = ot_merged["Period"].apply(
-            lambda p: get_ot_start(p, metadata)
-        )
-        ot_records = ot_merged.drop(
-            columns=["End Time_swipe", "Start Time_swipe"]
-        )
-        ot_records.loc[
-            ot_records["Validity"] == "Invalid", "Elapsed Minutes"
-        ] = 0
+        ot_merged["Elapsed Minutes"] = ot_merged["Elapsed Minutes"].fillna(0.0)
+        
+        def determine_validity(row):
+            ot_dur = row["Elapsed Minutes"]
+            start_t = str(row["Start Time"])
+            end_t = str(row["End Time"])
+            patient = str(row["Patient/Note"])
+            
+            if not start_t or start_t == "nan" or not end_t or end_t == "nan":
+                is_end_after_start = False
+            else:
+                is_end_after_start = (end_t > start_t)
+                
+            has_hash = patient.strip().startswith("###")
+            
+            if ot_dur != 0 and is_end_after_start and not has_hash:
+                return "Valid"
+            elif ot_dur != 0 and is_end_after_start and has_hash:
+                return "Invalid by manual inspection"
+            elif ot_dur == 0 and is_end_after_start:
+                return "Invalid by swiping records"
+            elif ot_dur != 0 and not is_end_after_start:
+                return "Invalid by weird Start/End Time"
+            elif ot_dur == 0 and not is_end_after_start:
+                return "Invalid by weird Start/End Time"
+            return "Invalid"
+
+        ot_merged["Validity"] = ot_merged.apply(determine_validity, axis=1)
+        
+        # Keep old behavior: zero out elapsed minutes if strictly Invalid
+        # But for 'Invalid by manual inspection' we maintain the value.
+        ot_merged.loc[ot_merged["Validity"] == "Invalid", "Elapsed Minutes"] = 0
+        ot_records = ot_merged
     else:
         ot_records["Elapsed Minutes"] = 0
+        ot_records["Validity"] = pd.Series(dtype="object")
+        ot_records["Start Time"] = pd.Series(dtype="object")
+        ot_records["End Time"] = pd.Series(dtype="object")
 
     return ot_records
 
@@ -131,13 +148,13 @@ def _calculate_leave_hours(leave_records: pd.DataFrame) -> float:
 
 
 def _build_duty_entries(
-    emp_swipes: pd.DataFrame, ot_records: pd.DataFrame
+    emp_swipes: pd.DataFrame, metadata: Metadata
 ) -> pd.DataFrame:
-    """Build the Duty Time Entries table from swipes + overtime.
+    """Build the Duty Time Entries table from swipes.
 
     Args:
         emp_swipes: Attendance records with late-duration column.
-        ot_records: Overtime records with Elapsed Minutes.
+        metadata: Period configuration dict for OT calculations.
 
     Returns:
         A DataFrame with per-period duty entries and overtime duration.
@@ -155,20 +172,15 @@ def _build_duty_entries(
         ]
     ].copy()
 
-    if not ot_records.empty:
-        daily_ot = (
-            ot_records.groupby(["Date", "Period"])["Elapsed Minutes"]
-            .sum()
-            .reset_index()
+    if not duty_entries.empty:
+        duty_entries["Overtime Duration (min)"] = duty_entries.apply(
+            lambda row: calc_overtime(row, metadata), axis=1
         )
-        duty_entries = duty_entries.merge(
-            daily_ot, on=["Date", "Period"], how="left"
-        ).rename(columns={"Elapsed Minutes": "Overtime Duration (min)"})
     else:
         duty_entries["Overtime Duration (min)"] = 0
 
     duty_entries["Overtime Duration (min)"] = (
-        duty_entries["Overtime Duration (min)"].fillna(0)
+        duty_entries["Overtime Duration (min)"].fillna(0.0)
     )
 
     duty_entries = duty_entries[
@@ -306,9 +318,12 @@ def generate_employee_summary(
         emp_report["Date"].isin(valid_dates)
     ].copy()
 
+    # --- duty entries ---
+    duty_entries = _build_duty_entries(emp_swipes, metadata)
+
     # --- overtime ---
     ot_records = _build_overtime_records(
-        emp_report_filtered, emp_swipes, metadata
+        emp_report_filtered, duty_entries
     )
 
     # --- leave ---
@@ -372,7 +387,7 @@ def generate_employee_summary(
         else pd.DataFrame(columns=["Date", "Period", "Type", "Reason"])
     )
 
-    duty_entries = _build_duty_entries(emp_swipes, ot_records)
+    # duty_entries previously computed
 
     visit_weekly = _build_visit_weekly_summary(visit_entries)
 

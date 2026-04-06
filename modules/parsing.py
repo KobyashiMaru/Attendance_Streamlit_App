@@ -455,8 +455,6 @@ def parse_overtime_leave_report(df: pd.DataFrame) -> pd.DataFrame:
     try:
         idx_attr = df.columns.get_loc("回報屬性")
         idx_work_date = df.columns.get_loc("上班日期")
-        idx_start_time = df.columns.get_loc("上班時間（打卡時間）")
-        idx_end_time = df.columns.get_loc("下班時間（打卡時間）")
         idx_ot_type = df.columns.get_loc("加班屬性")
 
         col_list = df.columns.tolist()
@@ -465,8 +463,8 @@ def parse_overtime_leave_report(df: pd.DataFrame) -> pd.DataFrame:
             if "加班時" in c and "病人" in c:
                 idx_ot_patient = i
                 break
-    except KeyError:
-        logger.error("Overtime report is missing required columns.")
+    except KeyError as e:
+        logger.error(f"Overtime report is missing required columns: {e}. Columns found: {df.columns.tolist()}")
         return pd.DataFrame()
 
     processed: List[dict] = []
@@ -489,8 +487,8 @@ def parse_overtime_leave_report(df: pd.DataFrame) -> pd.DataFrame:
 
         if "加班" in attr_str or "門診上班" in attr_str:
             _parse_overtime_row(
-                row, emp_name, offset, idx_work_date, idx_start_time,
-                idx_end_time, idx_ot_type, idx_ot_patient,
+                row, emp_name, offset, idx_work_date,
+                idx_ot_type, idx_ot_patient,
                 df.columns, processed,
             )
         elif "請假" in attr_str:
@@ -529,8 +527,6 @@ def _parse_overtime_row(
     emp_name: str,
     offset: int,
     idx_work_date: int,
-    idx_start_time: int,
-    idx_end_time: int,
     idx_ot_type: int,
     idx_ot_patient: int,
     columns: pd.Index,
@@ -538,8 +534,6 @@ def _parse_overtime_row(
 ) -> None:
     """Parse a single overtime/duty row and append to *processed*."""
     date_str = str(_get_val(row, idx_work_date, offset))
-    start_t = _get_val(row, idx_start_time, offset)
-    end_t = _get_val(row, idx_end_time, offset)
     ot_attr = _get_val(row, idx_ot_type, offset)
     ot_patient = _get_val(row, idx_ot_patient, offset)
 
@@ -554,28 +548,14 @@ def _parse_overtime_row(
         elif "晚" in p_str:
             period = "晚診"
 
-    elapsed_min = 0.0
-    try:
-        t1 = parse_cht_time(start_t)
-        t2 = parse_cht_time(end_t)
-        if t1 and t2:
-            diff = (t2 - t1).total_seconds() / 60.0
-            if diff < 0:
-                diff += 24 * 60
-            elapsed_min = diff
-    except Exception:
-        logger.warning(
-            "Could not calculate elapsed time for %s on %s", emp_name, date_str
-        )
-
     processed.append(
         {
             "Type": "Overtime",
             "Date": date_str,
             "Period": period,
-            "Start Time": start_t,
-            "End Time": end_t,
-            "Elapsed Minutes": elapsed_min,
+            "Start Time": "",
+            "End Time": "",
+            "Elapsed Minutes": 0.0,
             "OT Attribute": ot_attr,
             "Patient/Note": ot_patient,
             "Employee": emp_name,

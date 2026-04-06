@@ -93,8 +93,8 @@ class TestGenerateEmployeeSummary:
         result = generate_employee_summary('Test', att, ot, METADATA)
         od = result['Overtime Detail']
         if not od.empty:
-            assert od.iloc[0]['Validity'] == 'Invalid'
-            assert od.iloc[0]['Elapsed Minutes'] == 0
+            assert od.iloc[0]['Validity'] == 'Invalid by manual inspection'
+            assert od.iloc[0]['Elapsed Minutes'] == 140
 
     def test_overtime_validity_valid(self):
         att = _make_attendance()

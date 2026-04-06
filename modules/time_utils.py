@@ -150,13 +150,13 @@ def calc_overtime(row: pd.Series, metadata: Metadata) -> float:
     """Calculate overtime minutes for a merged swipe+OT row.
 
     Args:
-        row: A Series with 'End Time_swipe' and 'Period' columns.
+        row: A Series with 'End Time' and 'Period' columns.
         metadata: Period configuration dict.
 
     Returns:
         Overtime minutes (float, ≥ 0).
     """
-    end_t = row["End Time_swipe"]
+    end_t = row["End Time"]
     period = row["Period"]
     if pd.isna(end_t) or not end_t:
         return 0.0

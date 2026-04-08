@@ -333,9 +333,10 @@ def parse_shift_report(df: pd.DataFrame) -> pd.DataFrame:
                         val = int(float(cell_val))
                         if val == 1:
                             morning_period_value = 1
+                            night_period_value = 1
                         elif val == 2:
                             morning_period_value = 1
-                            night_period_value = 1
+                            # night_period_value = 1
                     except ValueError:
                         pass
 
